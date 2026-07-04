@@ -137,6 +137,7 @@
 #include "UI/Theme.h"
 #include "UI/PauseScreen.h"
 #include "UI/UIAtlas.h"
+#include "UI/XMB/XmbScreen.h"
 
 #if PPSSPP_PLATFORM(UWP)
 #include <dwrite_3.h>
@@ -792,6 +793,9 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	} else if (skipLogo && !boot_filename.empty()) {
 		INFO_LOG(Log::System, "Launching EmuScreen with boot filename '%s'", boot_filename.c_str());
 		g_screenManager->switchScreen(new EmuScreen(boot_filename));
+	} else if (g_Config.bEnableXmbDashboard) {
+		INFO_LOG(Log::System, "Launching XMB dashboard shell");
+		g_screenManager->switchScreen(new XmbScreen());
 	} else {
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::DEFAULT));
 	}
