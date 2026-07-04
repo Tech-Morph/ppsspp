@@ -1696,6 +1696,12 @@ list(APPEND NativeAppSource
 	UI/UIAtlas.cpp
 	UI/RetroAchievementScreens.cpp
 	UI/RetroAchievementScreens.h
+	UI/XMB/XmbScreen.h UI/XMB/XmbScreen.cpp
+    UI/XMB/XmbViewModel.h UI/XMB/XmbViewModel.cpp
+    UI/XMB/XmbRouter.h UI/XMB/XmbRouter.cpp
+    UI/XMB/XmbInputRouter.h UI/XMB/XmbInputRouter.cpp
+    UI/XMB/XmbRootPromptScreen.h UI/XMB/XmbRootPromptScreen.cpp
+    UI/XMB/XmbSettingsAdapter.h UI/XMB/XmbSettingsAdapter.cpp
 )
 
 if(ANDROID)
