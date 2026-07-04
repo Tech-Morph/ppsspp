@@ -210,6 +210,9 @@ public:
 
 	bool bRunBehindPauseMenu;
 
+    bool bEnableXmbDashboard = true;
+	bool bXmbRememberLegacyChoice = false;
+
 	// Core
 	bool bIgnoreBadMemAccess;
 
