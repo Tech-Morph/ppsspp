@@ -242,8 +242,8 @@ static const ConfigSetting generalSettings[] = {
 	ConfigSetting("ForceLagSync2", SETTING(g_Config, bForceLagSync), false, CfgFlag::PER_GAME),
 	ConfigSetting("DiscordRichPresence", SETTING(g_Config, bDiscordRichPresence), false, CfgFlag::DEFAULT),
 	ConfigSetting("UISound", SETTING(g_Config, bUISound), false, CfgFlag::DEFAULT),
-    ConfigSetting("EnableXmbDashboard", &g_Config.bEnableXmbDashboard, true, true),
-	ConfigSetting("XmbRememberLegacyChoice", &g_Config.bXmbRememberLegacyChoice, false, true),
+	ConfigSetting("EnableXmbDashboard", SETTING(g_Config, bEnableXmbDashboard), true, CfgFlag::DEFAULT),
+	ConfigSetting("XmbRememberLegacyChoice", SETTING(g_Config, bXmbRememberLegacyChoice), false, CfgFlag::DEFAULT),
 
 	ConfigSetting("DisableHTTPS", SETTING(g_Config, bDisableHTTPS), false, CfgFlag::DONT_SAVE),
 	ConfigSetting("AutoLoadSaveState", SETTING(g_Config, iAutoLoadSaveState), 0, CfgFlag::PER_GAME),
