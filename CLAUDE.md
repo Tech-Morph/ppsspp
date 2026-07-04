@@ -39,6 +39,8 @@ Build presets are defined in `CMakePresets.json`. The `b.sh` / `b-ios.sh` / `b-a
 | **Headless (CI/test)** | `headless/Headless.cpp` — no display, used by `test.py` |
 | **libretro core** | `libretro/libretro.cpp` |
 
+All of the above frontends funnel into the shared `NativeInit()` / `NativeFrame()` / `NativeShutdown()` lifecycle defined in `UI/NativeApp.cpp`. This is the single place where the **initial screen** shown at startup is decided (memstick setup, game settings, touch test, dev tools, direct boot, XMB dashboard, or the classic logo → main menu flow). Windows' `main.cpp` only owns the Win32 window/message loop; it still calls into `NativeInit()`.
+
 ---
 
 ## Directory Map
@@ -50,7 +52,22 @@ Build presets are defined in `CMakePresets.json`. The `b.sh` / `b-ios.sh` / `b-a
 | `Core/` | PSP CPU emulation (MIPS dynarec/interpreter), memory, syscalls, HLE, savestate, loader |
 | `GPU/` | GPU command processor, shader generation, all rendering backends (Vulkan/GL/D3D11) |
 | `Common/` | Platform-agnostic utilities: threading, math, file I/O, logging, data structures, GPU abstractions |
-| `UI/` | In-emulator UI (game browser, settings, overlays) — uses PPGE, the custom retained-mode UI framework |
+| `UI/` | In-emulator UI (game browser, settings, overlays) — uses PPGE, the custom retained-mode UI framework. Also contains `UI/NativeApp.cpp`, the shared app-lifecycle entry point for every desktop/mobile frontend, and the `UI/XMB/` startup-shell module (see below) |
+
+#### `UI/XMB/` — XMB Dashboard Shell
+
+A PS3-style "XrossMediaBar" startup dashboard, offered as an alternative to the classic `LogoScreen` → `MainScreen` flow. Gated behind `g_Config.bEnableXmbDashboard` (default `true`), toggled off automatically in favor of the legacy flow for direct file boot, `--gamesettings`, `--touchscreentest`, `--developertools`, and first-run memstick setup.
+
+| File | Role |
+|---|---|
+| `XmbScreen.h/.cpp` | Top-level `UIScreen` subclass; the screen pushed by `NativeInit()` when the dashboard is enabled |
+| `XmbViewModel.h/.cpp` | Holds dashboard state (selected category/item, enums/structs for the XMB data model) |
+| `XmbRouter.h/.cpp` | Navigation logic between XMB categories/panels |
+| `XmbInputRouter.h/.cpp` | Routes keyboard/gamepad/touch input into XMB navigation vs. passthrough to underlying mapper |
+| `XmbRootPromptScreen.h/.cpp` | First-run prompt asking whether to use XMB or the legacy UI (result respected via `bXmbRememberLegacyChoice`) |
+| `XmbSettingsAdapter.h/.cpp` | Bridges XMB UI actions to `g_Config` / existing settings screens, avoiding duplication of settings logic |
+
+All six pairs are registered in `CMakeLists.txt` under `NativeAppSource` (not `WindowsFiles`), since the dashboard is portable UI code shared across every desktop/mobile target, not Windows-specific.
 
 ### Platform Frontends
 
@@ -87,9 +104,10 @@ Build presets are defined in `CMakePresets.json`. The `b.sh` / `b-ios.sh` / `b-a
 ## Naming Conventions
 
 - **Files**: `PascalCase.cpp` / `PascalCase.h` throughout all C++ directories. Some utility files use `snake_case.cpp`.
-- **Classes/Structs**: `PascalCase` (e.g., `GPUCommon`, `MIPSState`, `VulkanRenderManager`)
+- **Classes/Structs**: `PascalCase` (e.g., `GPUCommon`, `MIPSState`, `VulkanRenderManager`, `XmbScreen`)
 - **Functions**: `PascalCase` for public methods; some internal helpers use `camelCase`
 - **Macros/platform guards**: `PPSSPP_ARCH(X)`, `PPSSPP_PLATFORM(X)`, `PPSSPP_API(X)` — defined in `ppsspp_config.h`; **never** use raw `#ifdef __ANDROID__` etc. directly — always go through these macros
+- **Config settings**: Declared as plain `bool`/`int`/etc. members with **no inline default** in `Core/Config.h`; the actual default value is supplied only via the `ConfigSetting(...)` constructor in `Core/Config.cpp`, using the `SETTING(g_Config, fieldName)` macro and a `CfgFlag::` value (`DEFAULT`, `PER_GAME`, or `DONT_SAVE`). Never mix an inline header default with a `ConfigSetting` default — they can silently disagree.
 - **Shaders**: Live in `assets/shaders/`; GLSL files use `.fsh`/`.vsh`, HLSL use `.hlsl`
 
 ---
@@ -106,6 +124,7 @@ Build presets are defined in `CMakePresets.json`. The `b.sh` / `b-ios.sh` / `b-a
 8. **Shader changes require atlas rebuild** — UI texture atlases are pre-baked; use `build_fontatlas.sh` / `build_ppgeatlas.sh` when modifying UI assets in `source_assets/`.
 9. **C++17 is the minimum standard** — do not use C++20 features without gating on compiler version checks.
 10. **Windows ARM/ARM64 and UWP do not support OpenGL** — `PPSSPP_API_ANY_GL` is explicitly undefined for those targets; use `PPSSPP_API(ANY_GL)` to gate GL code.
+11. **New startup screens must be added inside `NativeInit()`'s screen-selection `if/else` chain in `UI/NativeApp.cpp`**, positioned so they don't override explicit user/CLI intents (direct boot, `--gamesettings`, `--touchscreentest`, `--developertools`, first-run memstick setup). See the `XmbScreen` branch for the pattern to follow.
 
 ---
 
@@ -140,10 +159,25 @@ python3 test.py
 
 | File | Purpose |
 |---|---|
-| `CMakeLists.txt` | Root build definition (~100KB, all targets) |
+| `CMakeLists.txt` | Root build definition (~100KB, all targets). New UI source files (e.g. `UI/XMB/*`) must be added to the `NativeAppSource` list, not `WindowsFiles`, unless genuinely Windows-only |
 | `ppsspp_config.h` | Platform/arch/API detection macros — include everywhere |
-| `Core/Config.cpp` | All user-configurable settings (g_Config) |
+| `Core/Config.h` | Declares all `g_Config` fields as plain members (no inline defaults) |
+| `Core/Config.cpp` | All user-configurable settings and their defaults (`g_Config`), registered via `ConfigSetting(...)` tables (e.g. `generalSettings[]`) |
+| `UI/NativeApp.cpp` | Shared cross-platform app lifecycle (`NativeInit`, `NativeFrame`, `NativeShutdown`); owns initial-screen selection logic |
 | `Core/System.cpp` | Top-level emulation lifecycle (init, shutdown, frame) |
 | `GPU/GPUCommon.cpp` | Shared GPU command processor logic |
 | `Common/GPU/thin3d.h` | Thin abstraction layer over Vulkan/GL/D3D11 |
 | `history.md` | Full release changelog |
+
+---
+
+## Recent Feature Additions
+
+### XMB Dashboard Shell (in progress)
+
+A new optional startup experience inspired by the PS3 XMB interface, replacing the classic logo/main-menu flow when enabled.
+
+- **Config**: `bEnableXmbDashboard` (default `true`) and `bXmbRememberLegacyChoice` (default `false`), declared in `Core/Config.h`, registered in `Core/Config.cpp`'s `generalSettings[]` table.
+- **Startup wiring**: `UI/NativeApp.cpp`'s `NativeInit()` gained an `else if (gConfig.bEnableXmbDashboard)` branch, positioned after direct-boot/dev-tools/game-settings/touch-test checks and before the final legacy-logo fallback.
+- **New module**: `UI/XMB/` — 6 header/source pairs (`XmbScreen`, `XmbViewModel`, `XmbRouter`, `XmbInputRouter`, `XmbRootPromptScreen`, `XmbSettingsAdapter`), added to `NativeAppSource` in `CMakeLists.txt`.
+- **Status**: Windows-first rollout; core wiring (config, build list, init branch) is complete. Internal XMB screen/view-model logic is still being fleshed out against real `UIScreen`/`KeyInput`/`AxisInput` base-class signatures.
